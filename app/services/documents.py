@@ -78,23 +78,3 @@ def html_to_json(html_content):
     # Convert to JSON with ensure_ascii=False to avoid escaping characters
     json_data = json.dumps(data, ensure_ascii=False, indent=4)
     return json_data
-
-def convert_html_file_to_json(html_file_path, json_file_path):
-    # Read the HTML file with UTF-8 encoding
-    with open(html_file_path, 'r', encoding='utf-8') as file:
-        html_content = file.read()
-
-    # Convert HTML to JSON
-    json_data = html_to_json(html_content)
-
-    # Write JSON to a file with UTF-8 encoding
-    with open(json_file_path, 'w', encoding='utf-8') as json_file:
-        json_file.write(json_data)
-
-    print(f"Converted HTML to JSON and saved to {json_file_path}")
-
-# Usage example
-# file_name = 'EducationalWebsitesPackages'
-# html_file_path = f'DATA\{file_name}.html'
-# json_file_path = f'output\{file_name}.json'
-# convert_html_file_to_json(html_file_path, json_file_path)
