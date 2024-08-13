@@ -4,20 +4,32 @@ from typing import Dict
 from dotenv import load_dotenv
 import os, cohere
 from models.models import ChatMessage
+from services.vectorstore import load_vector_store_from_collection, init_embedding_model
+from services.chat_manager import RAGPipeline
 
 router = APIRouter()
 
 load_dotenv(dotenv_path='..../variables/.env')
 groq_api_key = os.getenv('GROQ_API_KEY')
 # cohere_api_key = os.getenv('COHERE_API_KEY')
+k_number = os.getenv('K_SEARCH')
+embedding_model_name = os.getenv('EMBEDDING_MODEL_NAME')
 
 # routers
-@router.post("/response")
-async def generate_response(message : ChatMessage):
-    return {
-        "question" : message,
-        "response" : "This is a temporally response for testing"
-        }
+@router.post("/get-response")
+async def get_response(question : str, conversation_id : int):
+    vectorstore = load_vector_store_from_collection()
+    cohere_api_key = 'pczcIAiOQLKPrJo3wRKrKlZyZpsqkw7lJiEhuJdA'
+    chat = RAGPipeline(vectorstore, cohere_api_key, k_number)
+    response = chat.generate_response(question, conversation_id)
+    return {"response" : response}
+
+# @router.post("/response")
+# async def generate_response(message : ChatMessage):
+#     return {
+#         "question" : message,
+#         "response" : "This is a temporally response for testing"
+#         }
 
 @router.post("/audio-to-text")
 async def audio_to_text(file: UploadFile = File(...)) -> Dict[str, str]:

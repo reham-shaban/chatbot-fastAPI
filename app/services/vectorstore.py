@@ -1,11 +1,16 @@
 from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from dotenv import load_dotenv
-import os, weaviate
+import os
+import weaviate
 from weaviate.classes.init import Auth
 from langchain_weaviate.vectorstores import WeaviateVectorStore
 
 load_dotenv(dotenv_path='..../variables/.env')
 hugging_api_key = os.getenv('HUGGING_FACE_API_KEY')
+weaviate_cluster_URL = os.getenv('WEAVIATE_CLUSTER_URL')
+weaviate_api_key = os.getenv('WEAVIATE_API_KEY')
+weaviate_collection_name = os.getenv('WEAVIATE_COLLECTION_NAME')
+weaviate_text_key = ['text' , 'name' , 'date' , 'active']
 
 # methods
 def init_embedding_model(model_name):
@@ -24,11 +29,12 @@ def create_vector_store_weaviate(documents , embedder , client):
     vector_store =  WeaviateVectorStore.from_documents(documents=documents, embedding=embedder, client=client )
     return vector_store
 
-def load_vector_store_from_collection(text_key  , collection_name , client ) :
+def load_vector_store_from_collection() :
+    client = init_weaviate_connection(weaviate_cluster_URL ,weaviate_api_key )
     vector_store = WeaviateVectorStore(
     client=client,
-    index_name=collection_name ,
-    text_key=text_key)
+    index_name=weaviate_collection_name ,
+    text_key=weaviate_text_key)
     return vector_store
 
 def add_documents_data(documents ,text_key , collection_name , client ):
