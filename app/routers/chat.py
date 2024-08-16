@@ -4,8 +4,8 @@ from typing import Dict
 from dotenv import load_dotenv
 import os, cohere
 from models.models import ChatMessage
-from services.vectorstore import load_vector_store_from_collection, init_embedding_model
-from services.chat_manager import RAGPipeline
+from app.services.vectorstore import DocumentsPipeline
+from app.services.chat_manager import RAGPipeline
 
 router = APIRouter()
 
@@ -16,13 +16,13 @@ k_number = os.getenv('K_SEARCH')
 embedding_model_name = os.getenv('EMBEDDING_MODEL_NAME')
 
 # routers
-@router.post("/get-response")
-async def get_response(question : str, conversation_id : int):
-    vectorstore = load_vector_store_from_collection()
-    cohere_api_key = 'pczcIAiOQLKPrJo3wRKrKlZyZpsqkw7lJiEhuJdA'
-    chat = RAGPipeline(vectorstore, cohere_api_key, k_number)
-    response = chat.generate_response(question, conversation_id)
-    return {"response" : response}
+# @router.post("/get-response")
+# async def get_response(question : str, conversation_id : int):
+#     vectorstore = load_vector_store_from_collection()
+#     cohere_api_key = 'pczcIAiOQLKPrJo3wRKrKlZyZpsqkw7lJiEhuJdA'
+#     chat = RAGPipeline(vectorstore, cohere_api_key, k_number)
+#     response = chat.generate_response(question, conversation_id)
+#     return {"response" : response}
 
 # @router.post("/response")
 # async def generate_response(message : ChatMessage):
