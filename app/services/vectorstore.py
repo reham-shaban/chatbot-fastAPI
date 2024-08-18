@@ -1,51 +1,55 @@
-import os
 import weaviate
-from dotenv import load_dotenv
 from weaviate.classes.init import Auth
 from weaviate.classes.query import Filter
 from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from langchain_weaviate.vectorstores import WeaviateVectorStore
+from convert_html import ConvertHTMLPipeline
 
-# pipeline
+
 class DocumentsPipeline :
-    def __init__(self, embedding_model_name, hugging_api_key, collection_name, cluster_URL, weaviate_api_key, text_key):
+    def __init__(self, collection_name, embedding_model_name, cluster_URL, weaviate_api_key, text_key, hugging_api_key):
         self.collection_name = collection_name
+        self.embedding_model_name = embedding_model_name
         self.cluster_URL = cluster_URL
         self.weaviate_api_key = weaviate_api_key
         self.text_key = text_key
+        self.hugging_api_key = hugging_api_key
         self.client = self._init_weaviate_connection()
-        self.embedder = self._init_embedding_model(hugging_api_key, embedding_model_name)
-        
-    def _init_embedding_model(self, api_key, model_name):
+        self.embedder = self._init_embedding_model()
+
+    def _init_embedding_model(self):
         embedder = HuggingFaceInferenceAPIEmbeddings(
-            api_key=api_key, model_name=model_name
-        )
+        api_key=self.hugging_api_key, model_name=self.embedding_model_name)
         return embedder
     
     def _init_weaviate_connection(self):
         client = weaviate.connect_to_weaviate_cloud(
-            cluster_url=self.cluster_URL,
-            auth_credentials=Auth.api_key(self.weaviate_api_key),
-        )
+        cluster_url=self.cluster_URL,
+        auth_credentials=Auth.api_key(self.weaviate_api_key),
+            )
         return client 
     
-    def _load_vector_store_from_collection(self):     
+    def _load_vector_store_from_collection(self):    
         vector_store = WeaviateVectorStore(
-            client=self.client,
-            index_name=self.collection_name ,
-            text_key=self.text_key ,
-            embedding=self.embedder
-        )
-        return vector_store
-      
+        client=self.client,
+        index_name=self.collection_name,
+        text_key=self.text_key,
+        embedding=self.embedder
+        )   
+        return vector_store  
+    
     def _get_collection(self):
         collection = self.client.collections.get(self.collection_name)
-        return collection 
-       
-    def add_documents_data(self, my_documents):
+        return collection    
+    
+    def add_documents_data(self, html_path, metadata):
         try:
+            convertHTMl = ConvertHTMLPipeline()
+            json_path = convertHTMl.convert_html_file_to_json(html_file_path=html_path)
+            
+            my_documents = convertHTMl.convert_json_to_documents(json_path , metadata)
             vector_store = self._load_vector_store_from_collection()
-            vector_store.add_documents(documents=my_documents)
+            vector_store.add_documents(documents= my_documents)
             return True  # Indicating success
         except ValueError as e:
             print(f"ValueError occurred: {e}")
@@ -83,3 +87,12 @@ class DocumentsPipeline :
             chunks.extend(o.properties)
             
         return chunks
+    
+    def get_all_documents(self):
+        collection = self._get_collection()
+        result = collection.query.fetch_objects(limit=5000)
+        for o in result.objects:
+            print(o.properties)
+        
+        return o.properties
+            

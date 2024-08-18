@@ -16,6 +16,25 @@ k_number = os.getenv('K_SEARCH')
 embedding_model_name = os.getenv('EMBEDDING_MODEL_NAME')
 
 # routers
+from fastapi.responses import StreamingResponse
+
+co = cohere.Client(api_key='NO7yfaSUsE44j2uPSDbGQEcJpPmVAhIiWzAl3omw')
+
+@router.get("/tell-joke")
+async def tell_joke():
+    async def joke_stream():
+        response = co.chat_stream(
+            model="command-r-plus",
+            message="tell me a joke"
+        )
+        for event in response:
+            if event.event_type == "text-generation":
+                yield event.text
+            
+    return StreamingResponse(joke_stream(), media_type="text/plain")
+
+# Run the app with `uvicorn filename:app --reload`
+
 # @router.post("/get-response")
 # async def get_response(question : str, conversation_id : int):
 #     vectorstore = load_vector_store_from_collection()
