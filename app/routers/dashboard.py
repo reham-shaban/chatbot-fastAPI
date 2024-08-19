@@ -1,54 +1,74 @@
 import os
 from dotenv import load_dotenv
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from app.services.documents import html_to_json
-from app.services.vectorstore import DocumentsPipeline
-from app.models.models import MetadataFilter
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request
+from fastapi.responses import JSONResponse
+from tempfile import NamedTemporaryFile
+from services.vectorstore import DocumentsPipeline
+from services.convert_html import ConvertHTMLPipeline
+from models.models import Metadata
 
 # Initialize router
 router = APIRouter()
 
 # get env variables
-load_dotenv(dotenv_path='..../variables/.env')
+dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../variables/.env'))
+load_dotenv(dotenv_path=dotenv_path)
 embedding_model_name = os.getenv('EMBEDDING_MODEL_NAME')
 hugging_api_key = os.getenv('HUGGING_FACE_API_KEY')
 weaviate_cluster_URL = os.getenv('WEAVIATE_CLUSTER_URL')
 weaviate_api_key = os.getenv('WEAVIATE_API_KEY')
 weaviate_collection_name = os.getenv('WEAVIATE_COLLECTION_NAME')
 
-# Initialize the DocumentsPipeline instance
-pipeline = DocumentsPipeline(
-    embedding_model_name=embedding_model_name,
-    hugging_api_key=hugging_api_key,
-    collection_name=weaviate_collection_name,
-    cluster_URL=weaviate_cluster_URL,
-    weaviate_api_key=weaviate_api_key,
-    text_key
-)
-
 # Routes
-# convert html file to json
-@router.post("/html-to-json")
-async def convert_html(file: UploadFile = File(...)):
+# Add document data from an HTML filer
+@router.post("/add-document/")
+async def add_document(metadata: Metadata, file: UploadFile = File(...)):
+    """
+    Adds document data from an uploaded HTML file to the Weaviate vector store.
+
+    Args:
+        file (UploadFile): The HTML file uploaded by the user.
+        metadata (Metadata): Metadata associated with the document.
+
+    Returns:
+        dict: A response indicating whether the document was successfully added.
+    """
     try:
-        # Read the HTML content from the uploaded file
-        html_content = await file.read()
+        # Initialize DocumentsPipeline
+        pipeline = DocumentsPipeline(
+            collection_name="YourCollectionName",
+            embedding_model_name="YourEmbeddingModelName",
+            cluster_URL="YourClusterURL",
+            weaviate_api_key="YourWeaviateAPIKey",
+            text_key="YourTextKey",
+            hugging_api_key="YourHuggingAPIKey"
+        )
 
-        # Convert HTML to JSON content
-        json_content = html_to_json(html_content.decode("utf-8"))
+        # Create a temporary file to save the uploaded HTML file
+        with NamedTemporaryFile(delete=False, suffix=".html") as temp_file:
+            temp_file.write(await file.read())
+            temp_file_path = temp_file.name
 
-        # Return the JSON content as a response
-        return json_content
+        # Add document data to the vector store
+        success = pipeline.add_documents_data(html_path=temp_file_path, metadata=metadata.dict())
+
+        # Clean up the temporary HTML file
+        os.remove(temp_file_path)
+
+        if success:
+            return {"status": "success", "message": "Document data added successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to add document data")
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 # update env variables
 @router.post("/update-env")
 async def update_env_variables(embedding_model_name: str = None, hugging_api_key: str = None, weaviate_cluster_URL: str = None, weaviate_api_key: str = None, weaviate_collection_name: str = None):
     try:
         # Path to your .env file
-        env_path = '.../variables/.env'
+        env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../variables/.env'))
 
         # Read current .env file
         with open(env_path, 'r') as file:
@@ -80,37 +100,48 @@ async def update_env_variables(embedding_model_name: str = None, hugging_api_key
         # Reload the .env file to update the environment variables in the running app
         load_dotenv(dotenv_path=env_path)
 
-        # Update your pipeline or any other components that depend on these variables
-        pipeline = DocumentsPipeline(
-            embedding_model_name=os.getenv('EMBEDDING_MODEL_NAME'),
-            hugging_api_key=os.getenv('HUGGING_FACE_API_KEY'),
-            collection_name=os.getenv('WEAVIATE_COLLECTION_NAME'),
-            cluster_URL=os.getenv('WEAVIATE_CLUSTER_URL'),
-            weaviate_api_key=os.getenv('WEAVIATE_API_KEY')
-        )
-
         return {"status": "Environment variables updated successfully"}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# delete document from collection
-@router.delete("/delete-documents")
-async def delete_documents(filter: MetadataFilter):
-    response = pipeline.delete_documents_by_metadata(filter.property, filter.metadata_filter)
-    
-    if response:
-        return {"status": "Documents deleted successfully"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to delete documents")
+@router.post("/update-template")
+async def update_prompt_template(prompt_template: str):
+    try:
+        # Validate the template content (if necessary)
+        if len(prompt_template.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Template content cannot be empty")
 
-# search document from collection
-@router.get("/search-documents")
-async def search_documents(filter: MetadataFilter):
-    documents = pipeline.search_documents_by_metadata(filter.property, filter.metadata_filter)
+        # Path to your configuration file
+        config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../config/prompt_template.txt'))
+
+        # Write the new template to the configuration file
+        with open(config_path, 'w', encoding='utf-8') as file:
+            file.write(prompt_template)
+
+        return {"status": "Prompt template updated successfully"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# # delete document from collection
+# # @router.delete("/delete-documents")
+# # async def delete_documents(filter: MetadataFilter):
+# #     response = pipeline.delete_documents_by_metadata(filter.property, filter.metadata_filter)
     
-    if documents is not None:
-        return {"documents": documents}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to search documents")
+# #     if response:
+# #         return {"status": "Documents deleted successfully"}
+# #     else:
+# #         raise HTTPException(status_code=500, detail="Failed to delete documents")
+
+# # # search document from collection
+# # @router.get("/search-documents")
+# # async def search_documents(filter: MetadataFilter):
+#     documents = pipeline.search_documents_by_metadata(filter.property, filter.metadata_filter)
+    
+#     if documents is not None:
+#         return {"documents": documents}
+#     else:
+#         raise HTTPException(status_code=500, detail="Failed to search documents")
 

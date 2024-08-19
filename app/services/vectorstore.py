@@ -3,16 +3,16 @@ from weaviate.classes.init import Auth
 from weaviate.classes.query import Filter
 from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from langchain_weaviate.vectorstores import WeaviateVectorStore
-from convert_html import ConvertHTMLPipeline
+from .convert_html import ConvertHTMLPipeline
 
 
 class DocumentsPipeline :
-    def __init__(self, collection_name, embedding_model_name, cluster_URL, weaviate_api_key, text_key, hugging_api_key):
+    def __init__(self, collection_name, embedding_model_name, cluster_URL, weaviate_api_key, hugging_api_key):
         self.collection_name = collection_name
         self.embedding_model_name = embedding_model_name
         self.cluster_URL = cluster_URL
         self.weaviate_api_key = weaviate_api_key
-        self.text_key = text_key
+        self.text_key = 'text'
         self.hugging_api_key = hugging_api_key
         self.client = self._init_weaviate_connection()
         self.embedder = self._init_embedding_model()
@@ -29,7 +29,7 @@ class DocumentsPipeline :
             )
         return client 
     
-    def _load_vector_store_from_collection(self):    
+    def load_vector_store_from_collection(self):    
         vector_store = WeaviateVectorStore(
         client=self.client,
         index_name=self.collection_name,
@@ -46,7 +46,6 @@ class DocumentsPipeline :
         try:
             convertHTMl = ConvertHTMLPipeline()
             json_path = convertHTMl.convert_html_file_to_json(html_file_path=html_path)
-            
             my_documents = convertHTMl.convert_json_to_documents(json_path , metadata)
             vector_store = self._load_vector_store_from_collection()
             vector_store.add_documents(documents= my_documents)

@@ -1,5 +1,21 @@
 from langchain_core.prompts import PromptTemplate
-import cohere
+from typing import AsyncGenerator
+import cohere, os
+
+def load_template_from_file():
+    try:
+        # Define the path to the configuration file
+        config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../config/prompt_template.txt'))
+        # Open the file with the correct encoding
+        with open(config_path, 'r', encoding='utf-8') as file:
+            return file.read()
+    except UnicodeDecodeError:
+        # Handle cases where the encoding might not be UTF-8
+        raise ValueError("Unable to decode the template file. Please check the file encoding.")
+    except Exception as e:
+        # Handle other potential exceptions
+        raise ValueError(f"Error reading template file: {e}")
+
 
 class RAGPipeline:
     def __init__(self, vectorstore,  conversation_id, cohere_api_key, template=None, k=20):
@@ -11,22 +27,7 @@ class RAGPipeline:
         self.conversation_id = conversation_id
 
     def _get_default_template(self):
-        return """
-        قم بفهم السياقات المقدمة مع كل سؤال ثم بقم بالاجابة على السؤال.
-        أجب باللغة العربية فقط.       
-        
-        إذا كنت لا تعرف الإجابة، فقط قل إنك لا تعرف، لا تحاول تصنيع إجابة.
-        سيصلك العديد من Documents لا توجد صلة وصل بينهم إلا إذا كانت الmetadata تحوي نفس ال name
-        اذا كانت الإجابة من جدول ما أرسله بالكامل
-        في حال عدم وضوح السؤال استفسر أكثر واقترح أسئلة للتوضيح وفقاََ لفهمك والمعلومات المقدمة.
-        بعد الإجابة قم باقتراح ثلاث أسئلة من المعلومات المقدمة لك
-        حافظ على إجابتك شاملة وصحيحة ومختصرة قدر الإمكان.
-        أضف مقدمة مناسبة تشرح للزبون ماهية سؤاله و ماهية الجواب.
-        كن لبقا في إجاباتك.
-        \n السياق: {context}
-        \n السؤال: {question}
-        \n الإجابة المفيدة:
-        """
+        return load_template_from_file()
 
     def generate_response(self, question):
         try:
@@ -48,23 +49,20 @@ class RAGPipeline:
     def _create_prompt(self, docs, question):
         return self.prompt_template.format(context=docs, question=question)
 
-    def _query_model(self, message):
+    async def _query_model(self, message: str) -> AsyncGenerator[str, None]:
         try:
             response = self.co.chat_stream(
                 model="command-r-plus",
                 message=message,
                 preamble="أنت شات بوت تعمل كموظف خدمة زبائن لدى شركة سيرياتيل.",
                 conversation_id=self.conversation_id,
-                max_tokens=1500, # max number of generated tokens
-                temperature=0.7, # Higher temperatures mean more random generations.
+                max_tokens=1500,  # max number of generated tokens
+                temperature=0.7,  # Higher temperatures mean more random generations.
             )
-            complete_response = ""
-            for event in response:
+            async for event in response:
                 if event.event_type == "text-generation":
-                    print(event.text, end="")
-                    complete_response += event.text
+                    yield event.text
                 elif event.event_type == "stream-end":
-                    print()
-            return complete_response
+                    break
         except Exception as e:
-            raise ValueError(f"Error querying model: {e}")
+            yield f"Error querying model: {e}"

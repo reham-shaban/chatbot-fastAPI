@@ -5,15 +5,31 @@ from dotenv import load_dotenv
 import os, cohere
 from models.models import ChatMessage
 from app.services.vectorstore import DocumentsPipeline
-from app.services.chat_manager import RAGPipeline
+from app.services.rag import RAGPipeline
 
 router = APIRouter()
 
-load_dotenv(dotenv_path='..../variables/.env')
-groq_api_key = os.getenv('GROQ_API_KEY')
-# cohere_api_key = os.getenv('COHERE_API_KEY')
-k_number = os.getenv('K_SEARCH')
+# get env variables
+dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../variables/.env'))
+load_dotenv(dotenv_path=dotenv_path)
 embedding_model_name = os.getenv('EMBEDDING_MODEL_NAME')
+hugging_api_key = os.getenv('HUGGING_FACE_API_KEY')
+groq_api_key = os.getenv('GROQ_API_KEY')
+cohere_api_key = os.getenv('COHERE_API_KEY')
+weaviate_cluster_URL = os.getenv('WEAVIATE_CLUSTER_URL')
+weaviate_api_key = os.getenv('WEAVIATE_API_KEY')
+weaviate_collection_name = os.getenv('WEAVIATE_COLLECTION_NAME')
+
+# doc_pipeline = DocumentsPipeline(
+#             collection_name=weaviate_collection_name,
+#             embedding_model_name=embedding_model_name,
+#             cluster_URL=weaviate_cluster_URL,
+#             weaviate_api_key=weaviate_api_key,
+#             hugging_api_key=hugging_api_key
+#         )
+# vectorstore = doc_pipeline.load_vector_store_from_collection()
+# rag_pipeline = RAGPipeline(vectorstore=vectorstore, conversation_id=1, cohere_api_key=cohere_api_key)
+# print("------rag------")
 
 # routers
 from fastapi.responses import StreamingResponse
