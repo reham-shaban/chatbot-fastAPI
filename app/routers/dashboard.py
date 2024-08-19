@@ -1,10 +1,9 @@
 import os
 from dotenv import load_dotenv
-from fastapi import APIRouter, UploadFile, File, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from tempfile import NamedTemporaryFile
-from services.vectorstore import DocumentsPipeline
-from services.convert_html import ConvertHTMLPipeline
+from app.services.vectorstore_manager import DocumentsPipeline
+from app.services.convert_html_pipeline import ConvertHTMLPipeline
 from models.models import Metadata
 
 # Initialize router
@@ -22,7 +21,7 @@ weaviate_collection_name = os.getenv('WEAVIATE_COLLECTION_NAME')
 # Routes
 # Add document data from an HTML filer
 @router.post("/add-document/")
-async def add_document(metadata: Metadata, file: UploadFile = File(...)):
+async def add_document(name: str, active: bool, date: str, file: UploadFile = File(...)):
     """
     Adds document data from an uploaded HTML file to the Weaviate vector store.
 
@@ -34,14 +33,19 @@ async def add_document(metadata: Metadata, file: UploadFile = File(...)):
         dict: A response indicating whether the document was successfully added.
     """
     try:
+        metadata = {
+            "name":name,
+            "active":active,
+            "data":date
+        }
+
         # Initialize DocumentsPipeline
         pipeline = DocumentsPipeline(
-            collection_name="YourCollectionName",
-            embedding_model_name="YourEmbeddingModelName",
-            cluster_URL="YourClusterURL",
-            weaviate_api_key="YourWeaviateAPIKey",
-            text_key="YourTextKey",
-            hugging_api_key="YourHuggingAPIKey"
+            collection_name=weaviate_collection_name,
+            embedding_model_name=embedding_model_name,
+            cluster_URL=weaviate_cluster_URL,
+            weaviate_api_key=weaviate_api_key,
+            hugging_api_key=hugging_api_key
         )
 
         # Create a temporary file to save the uploaded HTML file
@@ -49,8 +53,9 @@ async def add_document(metadata: Metadata, file: UploadFile = File(...)):
             temp_file.write(await file.read())
             temp_file_path = temp_file.name
 
+        print("metadata: ", metadata)
         # Add document data to the vector store
-        success = pipeline.add_documents_data(html_path=temp_file_path, metadata=metadata.dict())
+        success = pipeline.add_documents_data(html_path=temp_file_path, metadata=metadata)
 
         # Clean up the temporary HTML file
         os.remove(temp_file_path)
@@ -59,6 +64,95 @@ async def add_document(metadata: Metadata, file: UploadFile = File(...)):
             return {"status": "success", "message": "Document data added successfully"}
         else:
             raise HTTPException(status_code=500, detail="Failed to add document data")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+# Search document by metadata
+@router.post("/search-document")
+async def search_documents_by_metadata(property, metadata_filter):
+    """
+    Search documents by metadata.
+
+    Args:
+        property (str): The property to filter by (e.g., 'name', 'active', 'date').
+        metadata_filter (str): The value to filter by.
+
+    Returns:
+        List[Dict[str, Any]]: A list of documents matching the filter criteria.
+    """
+    try:
+        # Initialize DocumentsPipeline
+        pipeline = DocumentsPipeline(
+            collection_name=weaviate_collection_name,
+            embedding_model_name=embedding_model_name,
+            cluster_URL=weaviate_cluster_URL,
+            weaviate_api_key=weaviate_api_key,
+            hugging_api_key=hugging_api_key
+        )
+
+        # Search for documents using the specified property and filter
+        chunks = pipeline.search_documents_by_metadata(property=property, metadata_filter=metadata_filter)
+
+        return chunks
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+# Delete document by metadata
+@router.post("/delete-document")
+async def delete_documents_by_metadata(property, metadata_filter):
+    """
+    Delete documents by metadata.
+
+    Args:
+        property (str): The property to filter by (e.g., 'name', 'active', 'date').
+        metadata_filter (str): The value to filter by.
+
+    Returns:
+        List[Dict[str, Any]]: A list of documents matching the filter criteria.
+    """
+    try:
+        # Initialize DocumentsPipeline
+        pipeline = DocumentsPipeline(
+            collection_name=weaviate_collection_name,
+            embedding_model_name=embedding_model_name,
+            cluster_URL=weaviate_cluster_URL,
+            weaviate_api_key=weaviate_api_key,
+            hugging_api_key=hugging_api_key
+        )
+
+        # Delete for documents using the specified property and filter
+        chunks = pipeline.delete_documents_by_metadata(property=property, metadata_filter=metadata_filter)
+
+        return chunks
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+# Get all files info from collection
+@router.get("/get-all-files")
+async def get_all_files_unique_by_name():
+    """
+    Get all files info from collection.
+
+    Returns:
+        A list of dict that contains (name, active, date).
+    """
+    try:
+        # Initialize DocumentsPipeline
+        pipeline = DocumentsPipeline(
+            collection_name=weaviate_collection_name,
+            embedding_model_name=embedding_model_name,
+            cluster_URL=weaviate_cluster_URL,
+            weaviate_api_key=weaviate_api_key,
+            hugging_api_key=hugging_api_key
+        )
+
+        # Fetch all unique files by name
+        files = pipeline.get_all_files_uniqe_by_name()
+
+        return files
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
@@ -123,25 +217,3 @@ async def update_prompt_template(prompt_template: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# # delete document from collection
-# # @router.delete("/delete-documents")
-# # async def delete_documents(filter: MetadataFilter):
-# #     response = pipeline.delete_documents_by_metadata(filter.property, filter.metadata_filter)
-    
-# #     if response:
-# #         return {"status": "Documents deleted successfully"}
-# #     else:
-# #         raise HTTPException(status_code=500, detail="Failed to delete documents")
-
-# # # search document from collection
-# # @router.get("/search-documents")
-# # async def search_documents(filter: MetadataFilter):
-#     documents = pipeline.search_documents_by_metadata(filter.property, filter.metadata_filter)
-    
-#     if documents is not None:
-#         return {"documents": documents}
-#     else:
-#         raise HTTPException(status_code=500, detail="Failed to search documents")
-

@@ -3,7 +3,7 @@ from weaviate.classes.init import Auth
 from weaviate.classes.query import Filter
 from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from langchain_weaviate.vectorstores import WeaviateVectorStore
-from .convert_html import ConvertHTMLPipeline
+from .convert_html_pipeline import ConvertHTMLPipeline
 
 
 class DocumentsPipeline :
@@ -47,7 +47,7 @@ class DocumentsPipeline :
             convertHTMl = ConvertHTMLPipeline()
             json_path = convertHTMl.convert_html_file_to_json(html_file_path=html_path)
             my_documents = convertHTMl.convert_json_to_documents(json_path , metadata)
-            vector_store = self._load_vector_store_from_collection()
+            vector_store = self.load_vector_store_from_collection()
             vector_store.add_documents(documents= my_documents)
             return True  # Indicating success
         except ValueError as e:
@@ -80,11 +80,10 @@ class DocumentsPipeline :
         """
         collection = self._get_collection()
         search_filter = Filter.by_property(property).like(metadata_filter)
-        result = collection.query.fetch_objects(filters= search_filter)
+        result = collection.query.fetch_objects(filters=search_filter)
         chunks = []
         for o in result.objects:
-            chunks.extend(o.properties)
-            
+                chunks.append(o.properties)
         return chunks
     
     def get_all_documents(self):
@@ -94,4 +93,23 @@ class DocumentsPipeline :
             print(o.properties)
         
         return o.properties
-            
+    
+    def get_all_files_uniqe_by_name(self):
+        collection = self._get_collection()
+        result = collection.query.fetch_objects(limit=5000)
+        unique_files = {}
+        for o in result.objects:
+            # Get the properties of the current object
+            properties = o.properties
+    
+            # Exclude the 'text' key from the properties
+            filtered_properties = {k: v for k, v in properties.items() if k != 'text'}
+    
+            # Get the name key
+            name_key = filtered_properties.get('name')
+    
+            # Store only one entry per name
+            if name_key and name_key not in unique_files:
+                unique_files[name_key] = filtered_properties
+        return list(unique_files.values())
+

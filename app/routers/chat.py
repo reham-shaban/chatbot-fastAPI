@@ -4,8 +4,8 @@ from typing import Dict
 from dotenv import load_dotenv
 import os, cohere
 from models.models import ChatMessage
-from app.services.vectorstore import DocumentsPipeline
-from app.services.rag import RAGPipeline
+from services.vectorstore_manager import DocumentsPipeline
+from services.rag_pipeline import RAGPipeline
 
 router = APIRouter()
 
@@ -19,17 +19,6 @@ cohere_api_key = os.getenv('COHERE_API_KEY')
 weaviate_cluster_URL = os.getenv('WEAVIATE_CLUSTER_URL')
 weaviate_api_key = os.getenv('WEAVIATE_API_KEY')
 weaviate_collection_name = os.getenv('WEAVIATE_COLLECTION_NAME')
-
-# doc_pipeline = DocumentsPipeline(
-#             collection_name=weaviate_collection_name,
-#             embedding_model_name=embedding_model_name,
-#             cluster_URL=weaviate_cluster_URL,
-#             weaviate_api_key=weaviate_api_key,
-#             hugging_api_key=hugging_api_key
-#         )
-# vectorstore = doc_pipeline.load_vector_store_from_collection()
-# rag_pipeline = RAGPipeline(vectorstore=vectorstore, conversation_id=1, cohere_api_key=cohere_api_key)
-# print("------rag------")
 
 # routers
 from fastapi.responses import StreamingResponse
