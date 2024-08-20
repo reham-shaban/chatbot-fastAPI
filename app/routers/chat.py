@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from groq import Groq
-from typing import Dict
+from typing import Dict, AsyncGenerator
 from dotenv import load_dotenv
 import os, cohere
 from models.models import ChatMessage
@@ -9,7 +10,7 @@ from services.rag_pipeline import RAGPipeline
 
 router = APIRouter()
 
-# get env variables
+# Load environment variables
 dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../variables/.env'))
 load_dotenv(dotenv_path=dotenv_path)
 embedding_model_name = os.getenv('EMBEDDING_MODEL_NAME')
@@ -20,14 +21,44 @@ weaviate_cluster_URL = os.getenv('WEAVIATE_CLUSTER_URL')
 weaviate_api_key = os.getenv('WEAVIATE_API_KEY')
 weaviate_collection_name = os.getenv('WEAVIATE_COLLECTION_NAME')
 
-# routers
-from fastapi.responses import StreamingResponse
+# routes
+@router.post("/test-response")
+async def get_response(question: str = Form(...), conversation_id: str = Form(...)):
+    print(question)
+    print(conversation_id)
+    return {"response": "This is a test response"}
 
-co = cohere.Client(api_key='NO7yfaSUsE44j2uPSDbGQEcJpPmVAhIiWzAl3omw')
+@router.post("/get-response")
+async def get_response(question: str = Form(...), conversation_id: str = Form(...)):
+    try:
+        # Initialize document pipeline and RAGPipeline (asynchronous if possible)
+        document_pipeline = DocumentsPipeline(
+            collection_name=weaviate_collection_name,
+            embedding_model_name=embedding_model_name,
+            cluster_URL=weaviate_cluster_URL,
+            weaviate_api_key=weaviate_api_key,
+            hugging_api_key=hugging_api_key
+        )
+        collection = document_pipeline.get_collection()
+        embedder = document_pipeline.init_embedding_model()
 
-@router.get("/tell-joke")
+        chat = RAGPipeline(
+            conversation_id=conversation_id,
+            collection=collection,
+            embedder=embedder,
+            cohere_api_key=cohere_api_key,
+        )
+        
+        response = chat.generate_response(question)
+        return {"response": response}   
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/stream-response")
 async def tell_joke():
     async def joke_stream():
+        co = cohere.Client(api_key=cohere_api_key)
         response = co.chat_stream(
             model="command-r-plus",
             message="tell me a joke"
@@ -37,23 +68,6 @@ async def tell_joke():
                 yield event.text
             
     return StreamingResponse(joke_stream(), media_type="text/plain")
-
-# Run the app with `uvicorn filename:app --reload`
-
-# @router.post("/get-response")
-# async def get_response(question : str, conversation_id : int):
-#     vectorstore = load_vector_store_from_collection()
-#     cohere_api_key = 'pczcIAiOQLKPrJo3wRKrKlZyZpsqkw7lJiEhuJdA'
-#     chat = RAGPipeline(vectorstore, cohere_api_key, k_number)
-#     response = chat.generate_response(question, conversation_id)
-#     return {"response" : response}
-
-# @router.post("/response")
-# async def generate_response(message : ChatMessage):
-#     return {
-#         "question" : message,
-#         "response" : "This is a temporally response for testing"
-#         }
 
 @router.post("/audio-to-text")
 async def audio_to_text(file: UploadFile = File(...)) -> Dict[str, str]:

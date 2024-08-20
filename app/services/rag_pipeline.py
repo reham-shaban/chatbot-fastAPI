@@ -18,11 +18,12 @@ def load_template_from_file():
 
 
 class RAGPipeline:
-    def __init__(self, vectorstore,  conversation_id, cohere_api_key, template=None, k=20):
-        self.vectorstore = vectorstore 
+    def __init__(self, conversation_id, collection, embedder, cohere_api_key, k=20):
+        self.collection = collection
+        self.embedder = embedder
         self.k = k
-        self.retriever = self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": self.k})
-        self.prompt_template = PromptTemplate.from_template(template or self._get_default_template())
+        # self.retriever = self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": self.k})
+        self.prompt_template = PromptTemplate.from_template(self._get_default_template())
         self.co = cohere.Client(api_key=cohere_api_key)
         self.conversation_id = conversation_id
 
@@ -40,29 +41,31 @@ class RAGPipeline:
 
     def _retrieve_documents(self, question):
         try:
-            retrieved_docs = self.retriever.invoke(question)
-            #print(retrieved_docs)
-            return {f'doc_{i}': doc.page_content for i, doc in enumerate(retrieved_docs)}
+            embedder_qu = self.embedder.embed_query(question)
+            result = self.collection.query.near_vector(
+                near_vector= embedder_qu , 
+                limit=self.k
+            )
+            retrieved_docs = []
+            for o in result.objects:
+                retrieved_docs.append(o.properties)
+            return {f'doc_{i}': doc for i, doc in enumerate(retrieved_docs)}
         except Exception as e:
             raise ValueError(f"Error retrieving documents: {e}")
 
     def _create_prompt(self, docs, question):
         return self.prompt_template.format(context=docs, question=question)
 
-    async def _query_model(self, message: str) -> AsyncGenerator[str, None]:
+    def _query_model(self, message):
         try:
-            response = self.co.chat_stream(
+            response = self.co.chat(
                 model="command-r-plus",
                 message=message,
                 preamble="أنت شات بوت تعمل كموظف خدمة زبائن لدى شركة سيرياتيل.",
                 conversation_id=self.conversation_id,
-                max_tokens=1500,  # max number of generated tokens
-                temperature=0.7,  # Higher temperatures mean more random generations.
+                max_tokens=1500, # max number of generated tokens
+                temperature=0.3, # Higher temperatures mean more random generations.
             )
-            async for event in response:
-                if event.event_type == "text-generation":
-                    yield event.text
-                elif event.event_type == "stream-end":
-                    break
+            return response.text
         except Exception as e:
-            yield f"Error querying model: {e}"
+            raise ValueError(f"Error querying model: {e}")

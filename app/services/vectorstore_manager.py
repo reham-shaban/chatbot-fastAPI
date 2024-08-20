@@ -15,9 +15,9 @@ class DocumentsPipeline :
         self.text_key = 'text'
         self.hugging_api_key = hugging_api_key
         self.client = self._init_weaviate_connection()
-        self.embedder = self._init_embedding_model()
+        self.embedder = self.init_embedding_model()
 
-    def _init_embedding_model(self):
+    def init_embedding_model(self):
         embedder = HuggingFaceInferenceAPIEmbeddings(
         api_key=self.hugging_api_key, model_name=self.embedding_model_name)
         return embedder
@@ -38,7 +38,7 @@ class DocumentsPipeline :
         )   
         return vector_store  
     
-    def _get_collection(self):
+    def get_collection(self):
         collection = self.client.collections.get(self.collection_name)
         return collection    
     
@@ -69,7 +69,7 @@ class DocumentsPipeline :
         property : name (str) | active (bool) | date (str) 
         metadata_filter : the value of the property
         """
-        collection = self._get_collection()
+        collection = self.get_collection()
         search_filter = Filter.by_property(property).like(metadata_filter)
         return collection.data.delete_many(where=search_filter)
     
@@ -78,7 +78,7 @@ class DocumentsPipeline :
         property : name (str) | active (bool) | date (str) 
         metadata_filter : the value of the property
         """
-        collection = self._get_collection()
+        collection = self.get_collection()
         search_filter = Filter.by_property(property).like(metadata_filter)
         result = collection.query.fetch_objects(filters=search_filter)
         chunks = []
@@ -87,7 +87,7 @@ class DocumentsPipeline :
         return chunks
     
     def get_all_documents(self):
-        collection = self._get_collection()
+        collection = self.get_collection()
         result = collection.query.fetch_objects(limit=5000)
         for o in result.objects:
             print(o.properties)
@@ -95,7 +95,7 @@ class DocumentsPipeline :
         return o.properties
     
     def get_all_files_uniqe_by_name(self):
-        collection = self._get_collection()
+        collection = self.get_collection()
         result = collection.query.fetch_objects(limit=5000)
         unique_files = {}
         for o in result.objects:
