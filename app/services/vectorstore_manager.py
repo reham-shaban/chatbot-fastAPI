@@ -17,6 +17,9 @@ class DocumentsPipeline :
         self.client = self._init_weaviate_connection()
         self.embedder = self.init_embedding_model()
 
+    def close_client(self):
+        self.client.close()
+
     def init_embedding_model(self):
         embedder = HuggingFaceInferenceAPIEmbeddings(
         api_key=self.hugging_api_key, model_name=self.embedding_model_name)

@@ -1,10 +1,11 @@
 import os
 from dotenv import load_dotenv
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Body, Form
 from tempfile import NamedTemporaryFile
 from app.services.vectorstore_manager import DocumentsPipeline
 from app.services.convert_html_pipeline import ConvertHTMLPipeline
 from models.models import Metadata
+from pydantic import BaseModel
 
 # Initialize router
 router = APIRouter()
@@ -21,7 +22,12 @@ weaviate_collection_name = os.getenv('WEAVIATE_COLLECTION_NAME')
 # Routes
 # Add document data from an HTML filer
 @router.post("/add-document/")
-async def add_document(name: str, active: bool, date: str, file: UploadFile = File(...)):
+async def add_document(
+    name: str = Form(...),
+    active: bool = Form(...),
+    date: str = Form(...),
+    file: UploadFile = File(...)
+):
     """
     Adds document data from an uploaded HTML file to the Weaviate vector store.
 
@@ -34,9 +40,9 @@ async def add_document(name: str, active: bool, date: str, file: UploadFile = Fi
     """
     try:
         metadata = {
-            "name":name,
-            "active":active,
-            "data":date
+            "name": name,
+            "active": active,
+            "date": date
         }
 
         # Initialize DocumentsPipeline
@@ -59,6 +65,7 @@ async def add_document(name: str, active: bool, date: str, file: UploadFile = Fi
 
         # Clean up the temporary HTML file
         os.remove(temp_file_path)
+        pipeline.close_client()
 
         if success:
             return {"status": "success", "message": "Document data added successfully"}
@@ -68,15 +75,17 @@ async def add_document(name: str, active: bool, date: str, file: UploadFile = Fi
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
-# Search document by metadata
+class SearchRequest(BaseModel):
+    property: str
+    metadata_filter: str
+
 @router.post("/search-document")
-async def search_documents_by_metadata(property, metadata_filter):
+async def search_documents_by_metadata(request: SearchRequest):
     """
     Search documents by metadata.
 
     Args:
-        property (str): The property to filter by (e.g., 'name', 'active', 'date').
-        metadata_filter (str): The value to filter by.
+        request (SearchRequest): The request body containing property and metadata_filter.
 
     Returns:
         List[Dict[str, Any]]: A list of documents matching the filter criteria.
@@ -92,22 +101,24 @@ async def search_documents_by_metadata(property, metadata_filter):
         )
 
         # Search for documents using the specified property and filter
-        chunks = pipeline.search_documents_by_metadata(property=property, metadata_filter=metadata_filter)
+        chunks = pipeline.search_documents_by_metadata(property=request.property, metadata_filter=request.metadata_filter)
 
         return chunks
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
-# Delete document by metadata
+class DeleteDocumentRequest(BaseModel):
+    property: str
+    metadata_filter: str
+
 @router.post("/delete-document")
-async def delete_documents_by_metadata(property, metadata_filter):
+async def delete_documents_by_metadata(request: DeleteDocumentRequest):
     """
     Delete documents by metadata.
 
     Args:
-        property (str): The property to filter by (e.g., 'name', 'active', 'date').
-        metadata_filter (str): The value to filter by.
+        request: The request body containing `property` and `metadata_filter`.
 
     Returns:
         List[Dict[str, Any]]: A list of documents matching the filter criteria.
@@ -122,8 +133,11 @@ async def delete_documents_by_metadata(property, metadata_filter):
             hugging_api_key=hugging_api_key
         )
 
-        # Delete for documents using the specified property and filter
-        chunks = pipeline.delete_documents_by_metadata(property=property, metadata_filter=metadata_filter)
+        # Delete documents using the specified property and filter
+        chunks = pipeline.delete_documents_by_metadata(
+            property=request.property,
+            metadata_filter=request.metadata_filter
+        )
 
         return chunks
 
@@ -212,9 +226,9 @@ async def update_env_variables(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/update-template")
-async def update_prompt_template(prompt_template: str):
+async def update_prompt_template(prompt_template: str = Body(..., media_type="text/plain")):
     try:
-        # Validate the template content (if necessary)
+        # Validate the template content
         if len(prompt_template.strip()) == 0:
             raise HTTPException(status_code=400, detail="Template content cannot be empty")
 
