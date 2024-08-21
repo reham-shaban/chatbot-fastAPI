@@ -18,26 +18,42 @@ def load_template_from_file():
 
 
 class RAGPipeline:
-    def __init__(self, conversation_id, collection, embedder, cohere_api_key, k=20):
+    def __init__(self, collection, embedder, cohere_api_key, k=20):
         self.collection = collection
         self.embedder = embedder
         self.k = k
-        # self.retriever = self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": self.k})
         self.prompt_template = PromptTemplate.from_template(self._get_default_template())
         self.co = cohere.Client(api_key=cohere_api_key)
-        self.conversation_id = conversation_id
-
+        
     def _get_default_template(self):
         return load_template_from_file()
 
-    def generate_response(self, question):
+    def generate_response(self, question, conversation_id):
         try:
             retrieved_docs = self._retrieve_documents(question)
             message = self._create_prompt(retrieved_docs, question)
-            response = self._query_model(message)
+            response = self._query_model(message, conversation_id)
             return response
         except Exception as e:
             return f"Error generating response: {e}"
+        
+    async def stream_response(self, question, conversation_id):
+        try:
+            retrieved_docs = self._retrieve_documents(question)
+            message = self._create_prompt(retrieved_docs, question)
+            response = self.co.chat_stream(
+                model="command-r-plus",
+                message=message,
+                preamble="أنت شات بوت تعمل كموظف خدمة زبائن لدى شركة سيرياتيل.",
+                conversation_id=conversation_id,
+                max_tokens=1500,  # max number of generated tokens
+                temperature=0.3,  # Higher temperatures mean more random generations.
+            )
+            for event in response:
+                if event.event_type == "text-generation":
+                    yield event.text
+        except Exception as e:
+            yield f"Error generating response: {str(e)}"
 
     def _retrieve_documents(self, question):
         try:
@@ -56,13 +72,13 @@ class RAGPipeline:
     def _create_prompt(self, docs, question):
         return self.prompt_template.format(context=docs, question=question)
 
-    def _query_model(self, message):
+    def _query_model(self, message, conversation_id):
         try:
             response = self.co.chat(
                 model="command-r-plus",
                 message=message,
                 preamble="أنت شات بوت تعمل كموظف خدمة زبائن لدى شركة سيرياتيل.",
-                conversation_id=self.conversation_id,
+                conversation_id=conversation_id,
                 max_tokens=1500, # max number of generated tokens
                 temperature=0.3, # Higher temperatures mean more random generations.
             )

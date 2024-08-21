@@ -43,19 +43,48 @@ async def get_response(question: str = Form(...), conversation_id: str = Form(..
         embedder = document_pipeline.init_embedding_model()
 
         chat = RAGPipeline(
-            conversation_id=conversation_id,
             collection=collection,
             embedder=embedder,
             cohere_api_key=cohere_api_key,
         )
         
-        response = chat.generate_response(question)
+        response = chat.generate_response(question=question, conversation_id=conversation_id)
         return {"response": response}   
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/stream-response")
+@router.post("/stream-response")
+async def stream_response(question: str = Form(...), conversation_id: str = Form(...)):
+    # Initialize document pipeline and RAGPipeline
+    document_pipeline = DocumentsPipeline(
+        collection_name=weaviate_collection_name,
+        embedding_model_name=embedding_model_name,
+        cluster_URL=weaviate_cluster_URL,
+        weaviate_api_key=weaviate_api_key,
+        hugging_api_key=hugging_api_key
+    )
+    collection = document_pipeline.get_collection()
+    embedder = document_pipeline.init_embedding_model()
+
+    rag_pipeline = RAGPipeline(
+        collection=collection,
+        embedder=embedder,
+        cohere_api_key=cohere_api_key,
+    )
+
+    async def event_generator():
+        try:
+            # Stream the response from the pipeline
+            async for chunk in rag_pipeline.stream_response(question, conversation_id=conversation_id):
+                yield chunk
+        except Exception as e:
+            yield f"Error: {str(e)}"
+
+    return StreamingResponse(event_generator(), media_type="text/plain")
+
+
+@router.get("/stream-response-test")
 async def tell_joke():
     async def joke_stream():
         co = cohere.Client(api_key=cohere_api_key)

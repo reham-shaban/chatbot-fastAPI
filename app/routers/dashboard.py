@@ -159,7 +159,15 @@ async def get_all_files_unique_by_name():
 
 # update env variables
 @router.post("/update-env")
-async def update_env_variables(embedding_model_name: str = None, hugging_api_key: str = None, weaviate_cluster_URL: str = None, weaviate_api_key: str = None, weaviate_collection_name: str = None):
+async def update_env_variables(
+    embedding_model_name: str = None, 
+    hugging_api_key: str = None, 
+    weaviate_cluster_URL: str = None, 
+    weaviate_api_key: str = None, 
+    weaviate_collection_name: str = None,
+    groq_api_key: str = None,
+    cohere_api_key: str = None
+    ):
     try:
         # Path to your .env file
         env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../variables/.env'))
@@ -185,6 +193,10 @@ async def update_env_variables(embedding_model_name: str = None, hugging_api_key
             env_vars['WEAVIATE_API_KEY'] = weaviate_api_key
         if weaviate_collection_name:
             env_vars['WEAVIATE_COLLECTION_NAME'] = weaviate_collection_name
+        if groq_api_key:
+            env_vars['GROQ_API_KEY'] = groq_api_key
+        if cohere_api_key:
+            env_vars['COHERE_API_KEY'] = cohere_api_key
 
         # Write the updated variables back to the .env file
         with open(env_path, 'w') as file:

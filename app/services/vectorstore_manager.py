@@ -26,6 +26,7 @@ class DocumentsPipeline :
         client = weaviate.connect_to_weaviate_cloud(
         cluster_url=self.cluster_URL,
         auth_credentials=Auth.api_key(self.weaviate_api_key),
+        skip_init_checks=True
             )
         return client 
     
