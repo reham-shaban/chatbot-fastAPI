@@ -28,30 +28,49 @@ class RAGPipeline:
     def _get_default_template(self):
         return load_template_from_file()
 
-    def generate_response(self, question, conversation_id):
+    def generate_response(self, question, conversation_id, is_en=False):
         try:
+            if is_en:
+                question = self._translate(question, lang="ar")     
+            
             retrieved_docs = self._retrieve_documents(question)
             message = self._create_prompt(retrieved_docs, question)
             response = self._query_model(message, conversation_id)
+            
+            if is_en:
+                response = self._translate(response, lang="en")
             return response
         except Exception as e:
             return f"Error generating response: {e}"
         
-    async def stream_response(self, question, conversation_id):
+    async def stream_response(self, question, conversation_id, is_en=False):
         try:
+            if is_en:
+                question = self._translate(question, lang="ar")     
+            
             retrieved_docs = self._retrieve_documents(question)
             message = self._create_prompt(retrieved_docs, question)
-            response = self.co.chat_stream(
-                model="command-r-plus",
-                message=message,
-                preamble="أنت شات بوت تعمل كموظف خدمة زبائن لدى شركة سيرياتيل.",
-                conversation_id=conversation_id,
-                max_tokens=1500,  # max number of generated tokens
-                temperature=0.3,  # Higher temperatures mean more random generations.
-            )
-            for event in response:
-                if event.event_type == "text-generation":
-                    yield event.text
+            if is_en:
+                response_ar = self._query_model(message, conversation_id)
+                response = self.co.chat_stream(
+                    model="command-r-plus",
+                    message=f'ترجم لي هذا إلى الانجليزية بطريقة صحيحة بدون أيا كلمات زائدة : {response_ar}',
+                )
+                for event in response:
+                    if event.event_type == "text-generation":
+                        yield event.text
+            else:
+                response = self.co.chat_stream(
+                    model="command-r-plus",
+                    message=message,
+                    preamble="أنت شات بوت تعمل كموظف خدمة زبائن لدى شركة سيرياتيل.",
+                    conversation_id=conversation_id,
+                    max_tokens=1500,  # max number of generated tokens
+                    temperature=0.3,  # Higher temperatures mean more random generations.
+                )
+                for event in response:
+                    if event.event_type == "text-generation":
+                        yield event.text
         except Exception as e:
             yield f"Error generating response: {str(e)}"
 
@@ -85,3 +104,16 @@ class RAGPipeline:
             return response.text
         except Exception as e:
             raise ValueError(f"Error querying model: {e}")
+        
+    def _translate(self, query, lang) : # lang= ar | en
+        client = cohere.client('NO7yfaSUsE44j2uPSDbGQEcJpPmVAhIiWzAl3omw')
+        if lang == "ar":
+            message=f'ترجم لي هذا إلى العربية بطريقة صحيحة بدون أيا كلمات زائدة : {query}'
+        else:
+            message=f'ترجم لي هذا إلى الانجليزية بطريقة صحيحة بدون أيا كلمات زائدة : {query}'
+        
+        response = client.chat(
+            model="command-r-plus",
+            message=message
+        )  
+        return response.text

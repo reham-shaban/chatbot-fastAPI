@@ -29,7 +29,7 @@ async def get_response(question: str = Form(...), conversation_id: str = Form(..
     return {"response": "This is a test response"}
 
 @router.post("/get-response")
-async def get_response(question: str = Form(...), conversation_id: str = Form(...)):
+async def get_response(question: str = Form(...), conversation_id: str = Form(...), is_en: bool = Form(...)):
     try:
         # Initialize document pipeline and RAGPipeline (asynchronous if possible)
         document_pipeline = DocumentsPipeline(
@@ -48,14 +48,14 @@ async def get_response(question: str = Form(...), conversation_id: str = Form(..
             cohere_api_key=cohere_api_key,
         )
         
-        response = chat.generate_response(question=question, conversation_id=conversation_id)
+        response = chat.generate_response(question=question, conversation_id=conversation_id, is_en=is_en)
         return {"response": response}   
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/stream-response")
-async def stream_response(question: str = Form(...), conversation_id: str = Form(...)):
+async def stream_response(question: str = Form(...), conversation_id: str = Form(...), is_en: bool = Form(...)):
     # Initialize document pipeline and RAGPipeline
     document_pipeline = DocumentsPipeline(
         collection_name=weaviate_collection_name,
@@ -76,7 +76,7 @@ async def stream_response(question: str = Form(...), conversation_id: str = Form
     async def event_generator():
         try:
             # Stream the response from the pipeline
-            async for chunk in rag_pipeline.stream_response(question, conversation_id=conversation_id):
+            async for chunk in rag_pipeline.stream_response(question, conversation_id=conversation_id, is_en=is_en):
                 yield chunk
         except Exception as e:
             yield f"Error: {str(e)}"

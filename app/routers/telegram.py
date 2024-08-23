@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import os
 import nest_asyncio
 import logging
-import asyncio
+import asyncio, redis, uuid
 
 router = APIRouter()
 
@@ -53,14 +53,31 @@ bot = None
 application = None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Generate a unique conversation_id
+    conversation_id = str(uuid.uuid4())
+    
+    # Store the conversation_id in the context for later use in this session
+    context.user_data['conversation_id'] = conversation_id
+    
+    # Respond to the user
     await update.message.reply_text('مرحبًا بك في بوت خدمة العملاء لدينا. كيف يمكنني مساعدتك؟')
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_input = update.message.text
+    
+    # Retrieve the conversation_id from the context
+    conversation_id = context.user_data.get('conversation_id', None)
+    
+    # Ensure the bot shows it's typing
     context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
-    response = rag_pipeline.generate_response(user_input)
+    
+    # Generate a response using the conversation_id
+    response = rag_pipeline.generate_response(user_input, conversation_id=conversation_id)
+    
+    # Reply to the user's message with the response
     await update.message.reply_text(response)
-
+ 
 # Background task to run the Telegram bot
 async def run_bot():
     global bot, application
