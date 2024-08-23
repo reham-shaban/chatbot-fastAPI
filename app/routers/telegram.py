@@ -1,20 +1,16 @@
-from fastapi import APIRouter, BackgroundTasks, Request
-from telegram import Update 
-from telegram.ext import Application 
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from telegram.constants import ChatAction
+from fastapi import APIRouter, Request, Response, FastAPI
+from http import HTTPStatus
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext._contexttypes import ContextTypes
+from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+import os, uuid, logging
 from services.rag_pipeline import RAGPipeline
 from services.vectorstore_manager import DocumentsPipeline
-from dotenv import load_dotenv
-import os
-import nest_asyncio
-import logging
-import asyncio, redis, uuid
-import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 router = APIRouter()
 
@@ -29,13 +25,7 @@ cohere_api_key = os.getenv('COHERE_API_KEY')
 weaviate_cluster_URL = os.getenv('WEAVIATE_CLUSTER_URL')
 weaviate_api_key = os.getenv('WEAVIATE_API_KEY')
 weaviate_collection_name = os.getenv('WEAVIATE_COLLECTION_NAME')
-
-# Apply nest_asyncio to handle nested event loops
-nest_asyncio.apply()
-
-# Set up logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
+app_url = os.getenv('APP_URL')
 
 # Placeholder for the RAGPipeline instance
 document_pipeline = DocumentsPipeline(
@@ -54,49 +44,53 @@ rag_pipeline = RAGPipeline(
             cohere_api_key=cohere_api_key,
         )
 
-# Global variables for bot and application
-bot = None
-application = None
+# Initialize python telegram bot
+ptb = (
+    Application.builder()
+    .updater(None)
+    .token(telegram_api_token)
+    .read_timeout(7)
+    .get_updates_read_timeout(42)
+    .build()
+)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await ptb.bot.setWebhook(f"{app_url}/telegram")  # Replace with your webhook URL
+    async with ptb:
+        await ptb.start()
+        yield
+        await ptb.stop()
+
+@router.post("/")
+async def process_update(request: Request):
+    req = await request.json()
+    update = Update.de_json(req, ptb.bot)
+    await ptb.process_update(update)
+    return Response(status_code=HTTPStatus.OK)
+
+# Start command handler
+async def start(update, _: ContextTypes.DEFAULT_TYPE):
+    """Send a message and create new id when the command /start is issued."""
     # Generate a unique conversation_id
     global conversation_id 
     conversation_id = str(uuid.uuid4())
    
-    # Respond to the user
     await update.message.reply_text('مرحبًا بك في بوت خدمة العملاء لدينا. كيف يمكنني مساعدتك؟')
 
+ptb.add_handler(CommandHandler("start", start))
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Message handler
+async def handle_message(update, context):
+    """Handle incoming messages."""
     user_input = update.message.text
+    chat_id = update.message.chat_id
     
     # Generate a response using the conversation_id
     response = rag_pipeline.generate_response(user_input, conversation_id=conversation_id)
     
-    # Reply to the user's message with the response
-    await update.message.reply_text(response)
- 
-# Background task to run the Telegram bot
-async def run_bot():
-    global bot, application
-    application = Application.builder().token(telegram_api_token).build()
-    bot = application.bot  # Initialize the bot
+    # Send a response back to the user
+    await context.bot.send_message(chat_id=chat_id, text=response)
 
-    # Add handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Start the bot
-    await application.run_polling(allowed_updates=Update.ALL_TYPES)
-   
-@router.post("/webhook")
-async def webhook(request: Request, background_tasks: BackgroundTasks):
-    global bot, application
-    data = await request.json()
-    update = Update.de_json(data, bot)
-    background_tasks.add_task(application.process_update, update)
-    return {"status": "ok"}
-
-@router.on_event("startup")
-async def startup_event():
-    asyncio.create_task(run_bot())
+# Register the message handler
+ptb.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

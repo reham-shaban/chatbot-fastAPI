@@ -6,7 +6,8 @@ sys.path.append(str(Path(__file__).resolve().parent))
 from fastapi import FastAPI
 from app.routers import chat, dashboard, telegram
 
-app = FastAPI()
+# Initialize the FastAPI app with the lifespan for the Telegram bot
+app = FastAPI(lifespan=telegram.lifespan)
 
 # Include the routers
 app.include_router(chat.router, prefix="/chat")
