@@ -1,6 +1,10 @@
 from langchain_core.prompts import PromptTemplate
 from typing import AsyncGenerator
 import cohere, os
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def load_template_from_file():
     try:
@@ -16,7 +20,6 @@ def load_template_from_file():
         # Handle other potential exceptions
         raise ValueError(f"Error reading template file: {e}")
 
-
 class RAGPipeline:
     def __init__(self, collection, embedder, cohere_api_key, k=20):
         self.collection = collection
@@ -30,19 +33,22 @@ class RAGPipeline:
 
     def generate_response(self, question, conversation_id, is_en=False):
         try:
+            logger.info("Generating response")
             if is_en:
                 question = self._translate(question, lang="ar")     
-            
+            logger.info(f"question: {question}")
             retrieved_docs = self._retrieve_documents(question)
             message = self._create_prompt(retrieved_docs, question)
             response = self._query_model(message, conversation_id)
             
             if is_en:
                 response = self._translate(response, lang="en")
+            logger.info(f"response: {response}")
             return response
         except Exception as e:
+            logger.error(f"Error generating response: {e}")
             return f"Error generating response: {e}"
-        
+
     async def stream_response(self, question, conversation_id, is_en=False):
         try:
             if is_en:
@@ -106,7 +112,7 @@ class RAGPipeline:
             raise ValueError(f"Error querying model: {e}")
         
     def _translate(self, query, lang) : # lang= ar | en
-        client = cohere.client('NO7yfaSUsE44j2uPSDbGQEcJpPmVAhIiWzAl3omw')
+        client = cohere.Client('NO7yfaSUsE44j2uPSDbGQEcJpPmVAhIiWzAl3omw')
         if lang == "ar":
             message=f'ترجم لي هذا إلى العربية بطريقة صحيحة بدون أيا كلمات زائدة : {query}'
         else:

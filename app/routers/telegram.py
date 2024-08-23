@@ -1,5 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, Request
-from telegram import Update
+from telegram import Update 
+from telegram.ext import Application 
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ChatAction
 from services.rag_pipeline import RAGPipeline
@@ -9,6 +10,11 @@ import os
 import nest_asyncio
 import logging
 import asyncio, redis, uuid
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter()
 
@@ -54,23 +60,15 @@ application = None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Generate a unique conversation_id
+    global conversation_id 
     conversation_id = str(uuid.uuid4())
-    
-    # Store the conversation_id in the context for later use in this session
-    context.user_data['conversation_id'] = conversation_id
-    
+   
     # Respond to the user
     await update.message.reply_text('مرحبًا بك في بوت خدمة العملاء لدينا. كيف يمكنني مساعدتك؟')
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_input = update.message.text
-    
-    # Retrieve the conversation_id from the context
-    conversation_id = context.user_data.get('conversation_id', None)
-    
-    # Ensure the bot shows it's typing
-    context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     
     # Generate a response using the conversation_id
     response = rag_pipeline.generate_response(user_input, conversation_id=conversation_id)
@@ -90,7 +88,7 @@ async def run_bot():
 
     # Start the bot
     await application.run_polling(allowed_updates=Update.ALL_TYPES)
-
+   
 @router.post("/webhook")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
     global bot, application
