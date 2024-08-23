@@ -56,13 +56,13 @@ ptb = (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await ptb.bot.setWebhook(f"{app_url}/telegram")  # Replace with your webhook URL
+    await ptb.bot.setWebhook(f"{app_url}/telegram/webhook")  # Replace with your webhook URL
     async with ptb:
         await ptb.start()
         yield
         await ptb.stop()
 
-@router.post("/")
+@router.post("/webhook")
 async def process_update(request: Request):
     req = await request.json()
     update = Update.de_json(req, ptb.bot)
